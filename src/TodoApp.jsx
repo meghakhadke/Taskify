@@ -1,217 +1,169 @@
 import React, { useState, useEffect } from 'react';
-import TaskForm from './components/TaskForm';
-import TaskList from './components/TaskList';
-import 'react-datepicker/dist/react-datepicker.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import TaskInput from './components/TaskInput';
+import TaskItem from './components/TaskItem';
+import FilterButtons from './components/FilterButtons';
 
 function TodoApp() {
-  // State
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [darkMode, setDarkMode] = useState(true);
-  const [showTimer, setShowTimer] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(25 * 60);
 
-  // Load tasks from localStorage
+  // Load tasks from localStorage on mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('tasks');
-    if (savedTasks) setTasks(JSON.parse(savedTasks));
+    const savedTasks = localStorage.getItem('todoTasks');
+    if (savedTasks) {
+      setTasks(JSON.parse(savedTasks));
+    }
   }, []);
 
-  // Save tasks to localStorage
+  // Save tasks to localStorage whenever tasks change
   useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
+    localStorage.setItem('todoTasks', JSON.stringify(tasks));
   }, [tasks]);
 
-  // Pomodoro timer effect
-  useEffect(() => {
-    let timer;
-    if (showTimer && timeLeft > 0) {
-      timer = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [showTimer, timeLeft]);
-
-  // Task CRUD operations
-  const addTask = (newTask) => {
-    setTasks([...tasks, newTask]);
+  const addTask = (text) => {
+    const newTask = {
+      id: Date.now(),
+      text: text.trim(),
+      completed: false,
+      createdAt: new Date().toISOString()
+    };
+    setTasks([newTask, ...tasks]);
   };
 
-  const toggleCompleted = (id) => {
-    setTasks(tasks.map(task => {
-      if (task.id === id) {
-        return {
-          ...task,
-          isCompleted: !task.isCompleted,
-          completedAt: task.isCompleted ? null : new Date().toLocaleString()
-        };
-      }
-      return task;
-    }));
+  const toggleTask = (id) => {
+    setTasks(tasks.map(task =>
+      task.id === id ? { ...task, completed: !task.completed } : task
+    ));
   };
 
   const deleteTask = (id) => {
     setTasks(tasks.filter(task => task.id !== id));
   };
 
-  const updateTask = (updatedTask) => {
-    setTasks(tasks.map(task => 
-      task.id === updatedTask.id ? updatedTask : task
+  const editTask = (id, newText) => {
+    setTasks(tasks.map(task =>
+      task.id === id ? { ...task, text: newText.trim() } : task
     ));
   };
 
-  // Import/Export
-  const exportTasks = () => {
-    const dataStr = JSON.stringify(tasks);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportName = 'tasks_export.json';
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportName);
-    linkElement.click();
+  const clearCompleted = () => {
+    setTasks(tasks.filter(task => !task.completed));
   };
 
-  const importTasks = (e) => {
-    const fileReader = new FileReader();
-    fileReader.readAsText(e.target.files[0], "UTF-8");
-    fileReader.onload = e => {
-      setTasks(JSON.parse(e.target.result));
-    };
-  };
-
-  const startTimer = () => {
-    setShowTimer(true);
-    setTimeLeft(25 * 60);
-  };
-
-  // Filtering logic
+  // Filter tasks based on current filter
   const filteredTasks = tasks.filter(task => {
-    if (searchQuery && !task.task.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    if (filter === 'high') return task.priority === 'High';
-    if (filter === 'completed') return task.isCompleted;
-    if (filter === 'today') {
-      if (!task.dueDate) return false;
-      const today = new Date().setHours(0,0,0,0);
-      const due = new Date(task.dueDate).setHours(0,0,0,0);
-      return due === today;
-    }
-    return true;
+    if (filter === 'active') return !task.completed;
+    if (filter === 'completed') return task.completed;
+    return true; // 'all'
   });
 
-  // Calculate stats
-  const completedCount = tasks.filter(t => t.isCompleted).length;
-  const completionPercentage = tasks.length > 0 
-    ? Math.round((completedCount / tasks.length) * 100) 
-    : 0;
-  const overdueTasks = tasks.filter(task => 
-    task.dueDate && !task.isCompleted && new Date(task.dueDate) < new Date()
-  ).length;
+  const activeTasks = tasks.filter(task => !task.completed).length;
+  const completedTasks = tasks.filter(task => task.completed).length;
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
-      <div className={`relative max-w-6xl mx-auto p-8 rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-800' : 'bg-white'} transition-colors duration-300`}>
-        
+    <div className="min-h-screen py-8 px-4">
+      <div className="max-w-md mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold">TaskMaster Pro</h1>
-            <p className="text-lg opacity-80">Your ultimate productivity companion</p>
-          </div>
-          <div className="flex gap-4">
-            <button 
-              onClick={() => setDarkMode(!darkMode)}
-              className={`p-3 rounded-full ${darkMode ? 'bg-yellow-300 text-gray-900' : 'bg-gray-800 text-white'}`}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-            <button 
-              onClick={exportTasks}
-              className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              Export
-            </button>
-            <label className="p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 cursor-pointer">
-              Import
-              <input type="file" onChange={importTasks} className="hidden" accept=".json" />
-            </label>
-          </div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">To-Do List</h1>
+          <p className="text-gray-600">Stay organized and productive</p>
+        </motion.div>
 
-        <TaskForm 
-          darkMode={darkMode}
-          addTask={addTask}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          filter={filter}
-          setFilter={setFilter}
-        />
+        {/* Main Card */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-2xl shadow-xl overflow-hidden"
+        >
+          {/* Task Input */}
+          <div className="p-6 border-b border-gray-100">
+            <TaskInput onAddTask={addTask} />
+          </div>
+
+          {/* Filter Buttons */}
+          <div className="px-6 py-4 border-b border-gray-100">
+            <FilterButtons
+              currentFilter={filter}
+              onFilterChange={setFilter}
+              activeTasks={activeTasks}
+              completedTasks={completedTasks}
+            />
+          </div>
+
+          {/* Task List */}
+          <div className="min-h-[300px] max-h-[500px] overflow-y-auto">
+            <AnimatePresence mode="popLayout">
+              {filteredTasks.length > 0 ? (
+                filteredTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onToggle={toggleTask}
+                    onDelete={deleteTask}
+                    onEdit={editTask}
+                  />
+                ))
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="p-12 text-center text-gray-500"
+                >
+                  <div className="text-6xl mb-4">📝</div>
+                  <p className="text-lg">
+                    {filter === 'active' && 'No active tasks'}
+                    {filter === 'completed' && 'No completed tasks'}
+                    {filter === 'all' && 'No tasks yet'}
+                  </p>
+                  <p className="text-sm mt-2">
+                    {filter === 'all' && 'Add a task above to get started!'}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Footer */}
+          {tasks.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-sm text-gray-600"
+            >
+              <span>
+                {activeTasks} active, {completedTasks} completed
+              </span>
+              {completedTasks > 0 && (
+                <button
+                  onClick={clearCompleted}
+                  className="text-red-500 hover:text-red-700 font-medium transition-colors"
+                >
+                  Clear Completed
+                </button>
+              )}
+            </motion.div>
+          )}
+        </motion.div>
 
         {/* Stats */}
-        <div className={`p-6 rounded-xl mb-8 grid grid-cols-1 md:grid-cols-3 gap-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-600' : 'bg-white'} text-center`}>
-            <h3 className="text-lg font-semibold">Total Tasks</h3>
-            <p className="text-3xl">{tasks.length}</p>
-          </div>
-          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-600' : 'bg-white'} text-center`}>
-            <h3 className="text-lg font-semibold">Completed</h3>
-            <p className="text-3xl">{completedCount} ({completionPercentage}%)</p>
-          </div>
-          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-600' : 'bg-white'} text-center`}>
-            <h3 className="text-lg font-semibold">Overdue</h3>
-            <p className="text-3xl">{overdueTasks}</p>
-          </div>
-        </div>
-
-        {showTimer && (
-          <div className={`p-6 rounded-xl mb-8 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} text-center`}>
-            <h2 className="text-2xl mb-4">Pomodoro Timer</h2>
-            <div className="text-5xl font-mono mb-4">
-              {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-            </div>
-            <div className="flex justify-center gap-4">
-              <button 
-                onClick={() => setTimeLeft(25 * 60)} 
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg"
-              >
-                Work (25m)
-              </button>
-              <button 
-                onClick={() => setTimeLeft(5 * 60)} 
-                className="px-6 py-3 bg-green-500 text-white rounded-lg"
-              >
-                Break (5m)
-              </button>
-              <button 
-                onClick={() => setShowTimer(false)} 
-                className="px-6 py-3 bg-red-500 text-white rounded-lg"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        <TaskList 
-          tasks={filteredTasks}
-          darkMode={darkMode}
-          toggleCompleted={toggleCompleted}
-          deleteTask={deleteTask}
-          updateTask={updateTask}
-        />
-
-        {/* Pomodoro Starter */}
-        <div className="text-center">
-          <button 
-            onClick={startTimer}
-            className="px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600"
+        {tasks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-6 text-center text-gray-600"
           >
-            Start Pomodoro Timer
-          </button>
-        </div>
+            <p className="text-sm">
+              Total: {tasks.length} tasks
+            </p>
+          </motion.div>
+        )}
       </div>
     </div>
   );
